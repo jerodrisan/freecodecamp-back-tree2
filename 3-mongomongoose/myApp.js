@@ -1,4 +1,4 @@
-////
+///.env MONGO_URI='mongodb+srv://polirodriron:dWfr082Q1o7WfACk@cluster0.pthwzwl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 require('dotenv').config();
 const { json } = require('body-parser');
 const { response } = require('express');
