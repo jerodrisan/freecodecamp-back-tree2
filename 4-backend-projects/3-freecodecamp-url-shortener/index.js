@@ -1,0 +1,160 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const app = express();
+const dns = require('dns');
+const { hostname } = require('os');
+const {URL} = require('url')
+const mongoose = require('mongoose')
+
+// Basic Configuration
+const port = process.env.PORT || 3000;
+
+app.use(cors());
+
+//Cargamos el css
+app.use('/public', express.static(`${process.cwd()}/public`)); //cwd(): Es un método del objeto process que retorna una cadena de texto representando el directorio de trabajo actual (Current Working Directory) de la aplicación Node.js. En otras palabras, indica la carpeta desde donde se ejecutó el proceso Node.js.
+
+//Cargamos la pagina index.html
+app.get('/', function(req, res) {
+  res.sendFile(process.cwd() + '/views/index.html');
+});
+
+
+//express.json(): Cuando se recibe una solicitud POST en la ruta /usuarios, los datos JSON del cuerpo de la solicitud se asignan a req.body.
+app.use(express.json()) 
+
+//express.urlencoded(): Para analizar datos enviados al servidor a travesd de un formulario htlm:
+//1.Decodifica: Convierte los datos codificados en URL en un objeto JavaScript.
+//2.Asigna: Asigna este objeto JavaScript a la propiedad req.body del objeto de solicitud.
+app.use(express.urlencoded({extended:true})) 
+
+////express.json() Se usa para analizar datos en json() mientras que express.urlencoded se usa para analizar datos codificados en URL.
+//Ambos hacen lo mismo ,toman los datos de la solicitud y los convierten en en un objeto javascript
+
+
+
+// Your first API endpoint
+app.get('/api/hello', function(req, res) { 
+  res.json({ greeting: 'hello API' });
+});
+
+function setConnection(){ 
+  mongoose.set('strictQuery',false)  //desabilitamos el modo estricto de consultas
+  mongoose.connect(process.env.MONGODB_URL)
+}
+
+
+function agregateUrl(Model, url, short_url){
+  const newUrl = new Model({
+    original_url: url,
+    short_url:short_url
+  })
+  newUrl.save().then(savedUrl=>{
+    console.log('saved url ', savedUrl)
+  })
+}
+
+
+const contactSchema = new mongoose.Schema({
+  original_url: {
+    type:String,
+    required:true,
+    unique:true
+  },
+  short_url: {
+    type:String,
+    required:true,
+    unique:true
+  }
+})
+const ShortUrl = mongoose.model('Url', contactSchema) //mongoose convierte Contact a contacts automaticamente como nombre de la coleccion
+
+app.post('/api/shorturl', (req,res)=>{
+   
+      let url = req.body.url     //pillamos el campo nombre url del campo name del formulario que se encuentra en el archivo index.html
+      
+      if (url.slice(0,8)!=='https://' &&  url.slice(0,7)!=='http://') {    
+        //No comienza por hhpts:// o http://
+        res.json({
+          error:"invalid url"
+        })        
+      }else{       
+         //En caso de que si comience : Pillamos el tipo de protocolo y el resto de URL
+        let {protocoloURL, restURL} =url.slice(0,8)==='https://' 
+        ? {protocoloURL:'https://', restURL: url.slice(8)} 
+        : {protocoloURL:'http://', restURL: url.slice(7)} 
+        
+        //A continuacion le pasamos la url y la analizamos con dns.lookup
+       const options = {
+        family: 6,
+        hints: dns.ADDRCONFIG | dns.V4MAPPED           
+      }
+      dns.lookup(restURL,  (err, adress, family) =>{           
+        if(err){
+          //console.log('errores', err.code , err.hostname)
+          res.json({
+            error:"Invalid hostname"
+          })
+        }else{        
+         //Si la url es validad ya podemos agregarla a la base de datos: 
+          //Conectamos con la base de datos
+          setConnection()
+          //agregamos la url protocolo incluido          
+          let fullURL = `${protocoloURL}${restURL}`
+          ShortUrl.findOne({original_url:fullURL}).then(urlFound=>{            
+            if(urlFound){             
+              res.json({
+                original_url: urlFound.original_url,
+                short_url: urlFound.short_url
+              })
+            }else{
+              //console.log('no encontrada', urlFound)
+              //no se ha encontrado con lo cual agregamos
+              if(urlFound===null){          
+                ShortUrl.countDocuments().then(count=>{
+                  if(count==0){                  
+                    //agregamos el primer elemento
+                    agregateUrl(ShortUrl,fullURL,1)        
+                    res.json({
+                      original_url:fullURL,
+                      short_url:1
+                    })        
+                  }else{
+                    //Añadimos un elemento 
+                    //sacamos el numero de documentos y se lo ponemos como shortUrl
+                    agregateUrl(ShortUrl, fullURL, count+1)     
+                    res.json({
+                      original_url: fullURL, 
+                      short_url: count+1
+                    }) 
+                  }
+                })           
+              }             
+            }
+          })  
+        }    
+
+      }) 
+    }      
+  })
+
+app.get('/api/shorturl/:id', (req, res)=>{  
+   //const id = Number(req.params.id)
+   const id = req.params.id
+   //console.log('type of id ', typeof id)
+   //Conectamos con la base de datos   
+   setConnection()
+   ShortUrl.findOne({short_url:id}).then(urlFound=>{
+    if(urlFound){      
+     const url = urlFound.original_url           
+     res.redirect(url)
+    }else{
+     res.json({"error":"No short URL found for the given input"})  
+   }   
+  })
+})
+
+app.listen(port, function() {
+  console.log(`Listening on port ${port}`);
+});
