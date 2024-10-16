@@ -1,0 +1,20 @@
+{
+	"author":"Jose Perez",
+	"description": "This is an awesome project",
+	"keywords": ["freecodecamp","awesome","related"],
+	"version": "1.2.0",
+	"license":"MIT",
+	"name": "fcc-learn-npm-package-json",
+	"dependencies": {
+		"package-name": "versiom",
+		"@freecodecamp/example": "1.1.0"
+	},
+	"main": "server.js",
+	"scripts": {
+		"start": "node server.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/freeCodeCamp/boilerplate-npm.git"
+	}
+}
